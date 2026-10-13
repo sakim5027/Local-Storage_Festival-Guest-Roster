@@ -43,7 +43,7 @@ class DirectoryApp extends StatelessWidget {
       title: 'Fall Festival Roster',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: Colors.brown, useMaterial3: true),
-      home: FallFestivalRoster(helper: helper),
+      home: FolderListScreen(helper: helper),
     );
   }
 }
@@ -483,6 +483,142 @@ class _FallFestivalRosterState extends State<FallFestivalRoster> {
           ],
         ),
       ),
+    );
+  }
+}
+
+//Part 2 new FolderListScreen
+class FolderListScreen extends StatefulWidget {
+  final DatabaseHelper helper;
+
+  const FolderListScreen({super.key, required this.helper});
+
+  @override
+  State<FolderListScreen> createState() => _FolderListScreenState();
+}
+
+class _FolderListScreenState extends State<FolderListScreen> {
+  List<Folder> folders = [];
+
+  bool isLoading = true;
+  bool isBusy = false;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    loadFolders();
+  }
+
+  //show a feedback message
+  void showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  //read folder records from SQLite database
+  Future<void> loadFolders() async {
+    if (isBusy) return;
+
+    setState(() {
+      isLoading = true;
+      isBusy = true;
+    });
+
+    try {
+      final rows = await widget.helper.getFoldersWithCounts();
+
+      if (!mounted) return;
+
+      setState(() {
+        folders = rows;
+        errorMessage = null;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Load folders failed: $error\n$stackTrace');
+
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = 'Could not load folders: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          isBusy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Card Catalogue'),
+        actions: [
+          IconButton(
+            tooltip: 'Guest Roster',
+            icon: const Icon(Icons.people),
+            onPressed: isBusy
+                ? null
+                : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            FallFestivalRoster(helper: widget.helper),
+                      ),
+                    );
+                  },
+          ),
+
+          IconButton(
+            tooltip: 'Refresh',
+            icon: const Icon(Icons.refresh),
+            onPressed: isBusy ? null : loadFolders,
+          ),
+        ],
+      ),
+
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : errorMessage != null
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(errorMessage!, textAlign: TextAlign.center),
+                  ElevatedButton(
+                    onPressed: isBusy ? null : loadFolders,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          : folders.isEmpty
+          ? const Center(child: Text('No folders yet'))
+          : ListView.builder(
+              itemCount: folders.length,
+              itemBuilder: (context, index) {
+                final folder = folders[index];
+
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.folder),
+                    title: Text(folder.name),
+                    subtitle: Text(
+                      'ID: ${folder.id} | '
+                      '${folder.cardCount} cards',
+                    ),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
