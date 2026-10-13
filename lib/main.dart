@@ -731,6 +731,11 @@ class _FolderListScreenState extends State<FolderListScreen> {
                 );
               },
             ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: isBusy ? null : addFolder,
+        icon: const Icon(Icons.add),
+        label: const Text('Add Folder'),
+      ),
     );
   }
 }
