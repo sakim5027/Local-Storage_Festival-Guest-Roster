@@ -148,3 +148,46 @@ class Folder {
     return {if (id != null) 'id': id, 'name': name, 'created_at': createdAt};
   }
 }
+
+//Part 2 new CardRecord model
+class CardRecord {
+  final int? id;
+  final String title;
+  final String suit;
+  final String notes;
+  final String? imageRef;
+  final int folderId;
+
+  CardRecord({
+    this.id,
+    required this.title,
+    required this.suit,
+    this.notes = '',
+    this.imageRef,
+    required this.folderId,
+  });
+
+  //convert SQLite Map into CardRecord object
+  factory CardRecord.fromMap(Map<String, dynamic> map) {
+    return CardRecord(
+      id: map['id'] as int,
+      title: map['title'] as String,
+      suit: map['suit'] as String,
+      notes: map['notes'] as String,
+      imageRef: map['image_ref'] as String?,
+      folderId: map['folder_id'] as int,
+    );
+  }
+
+  //convert CardRecord object into SQLite Map
+  Map<String, dynamic> toMap() {
+    return {
+      if (id != null) 'id': id,
+      'title': title,
+      'suit': suit,
+      'notes': notes,
+      'image_ref': imageRef,
+      'folder_id': folderId,
+    };
+  }
+}
