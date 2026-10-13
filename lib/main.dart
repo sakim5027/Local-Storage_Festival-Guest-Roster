@@ -903,6 +903,35 @@ class _FolderCardsScreenState extends State<FolderCardsScreen> {
     }
   }
 
+  //Open Add/Edit card form
+  Future<void> openCardForm([CardRecord? card]) async {
+    if (isBusy) return;
+
+    final result = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CardEditorScreen(
+          helper: widget.helper,
+          folderId: widget.folder.id!,
+          card: card,
+        ),
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    // Reload records after successful save.
+    await loadCards();
+
+    if (!mounted) return;
+
+    if (errorMessage == null) {
+      showMessage(result);
+    } else {
+      showMessage('$result, but refresh failed. Tap Retry.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -944,10 +973,270 @@ class _FolderCardsScreenState extends State<FolderCardsScreen> {
                     leading: const Icon(Icons.style),
                     title: Text(card.title),
                     subtitle: Text('ID: ${card.id} | ${card.suit}'),
+                    trailing: IconButton(
+                      tooltip: 'Edit card',
+                      icon: const Icon(Icons.edit),
+                      onPressed: isBusy ? null : () => openCardForm(card),
+                    ),
                   ),
                 );
               },
             ),
+
+      //Add Card button
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: isBusy ? null : () => openCardForm(),
+        icon: const Icon(Icons.add),
+        label: const Text('Add Card'),
+      ),
+    );
+  }
+}
+
+// PART 2: Add/Edit Card Form
+class CardEditorScreen extends StatefulWidget {
+  final DatabaseHelper helper;
+  final int folderId;
+  final CardRecord? card;
+
+  const CardEditorScreen({
+    super.key,
+    required this.helper,
+    required this.folderId,
+    this.card,
+  });
+
+  @override
+  State<CardEditorScreen> createState() => _CardEditorScreenState();
+}
+
+class _CardEditorScreenState extends State<CardEditorScreen> {
+  final formKey = GlobalKey<FormState>();
+
+  final titleController = TextEditingController();
+  final notesController = TextEditingController();
+  final imageController = TextEditingController();
+
+  final suits = ['Hearts', 'Diamonds', 'Clubs', 'Spades'];
+
+  String selectedSuit = 'Hearts';
+  bool isBusy = false;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // When editing, show the existing card values.
+    if (widget.card != null) {
+      titleController.text = widget.card!.title;
+      notesController.text = widget.card!.notes;
+      imageController.text = widget.card!.imageRef ?? '';
+      selectedSuit = widget.card!.suit;
+    }
+  }
+
+  Future<void> saveCard() async {
+    if (isBusy) return;
+    if (!formKey.currentState!.validate()) return;
+
+    final imageText = imageController.text.trim();
+
+    final card = CardRecord(
+      id: widget.card?.id,
+      title: titleController.text.trim(),
+      suit: selectedSuit,
+      notes: notesController.text.trim(),
+      imageRef: imageText.isEmpty ? null : imageText,
+      folderId: widget.folderId,
+    );
+
+    setState(() {
+      isBusy = true;
+      errorMessage = null;
+    });
+
+    try {
+      final exists = await widget.helper.folderExists(widget.folderId);
+
+      if (!mounted) return;
+
+      if (!exists) {
+        setState(() {
+          errorMessage = 'Selected folder no longer exists.';
+        });
+        return;
+      }
+
+      String successMessage;
+
+      if (widget.card == null) {
+        final id = await widget.helper.insertCard(card);
+        successMessage = 'Card added. ID: $id';
+      } else {
+        final affected = await widget.helper.updateCard(card);
+
+        if (!mounted) return;
+
+        if (affected == 0) {
+          setState(() {
+            errorMessage = 'Card no longer exists. Rows affected: 0';
+          });
+          return;
+        }
+
+        successMessage = 'Card updated. Rows affected: $affected';
+      }
+
+      if (!mounted) return;
+
+      Navigator.pop(context, successMessage);
+    } catch (error, stackTrace) {
+      debugPrint('Save card failed: $error\n$stackTrace');
+
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = 'Could not save card: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isBusy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    notesController.dispose();
+    imageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEditing = widget.card != null;
+
+    return PopScope(
+      canPop: !isBusy,
+      child: Scaffold(
+        appBar: AppBar(title: Text(isEditing ? 'Edit Card' : 'Add Card')),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextFormField(
+                  controller: titleController,
+                  enabled: !isBusy,
+                  decoration: const InputDecoration(
+                    labelText: 'Card Title',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Card title cannot be blank.';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                DropdownButtonFormField<String>(
+                  initialValue: selectedSuit,
+                  decoration: const InputDecoration(
+                    labelText: 'Suit',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: suits.map((suit) {
+                    return DropdownMenuItem<String>(
+                      value: suit,
+                      child: Text(suit),
+                    );
+                  }).toList(),
+                  onChanged: isBusy
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            setState(() {
+                              selectedSuit = value;
+                            });
+                          }
+                        },
+                ),
+
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: notesController,
+                  enabled: !isBusy,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (Optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: imageController,
+                  enabled: !isBusy,
+                  decoration: const InputDecoration(
+                    labelText: 'Image Reference (Optional)',
+                    hintText: 'assets/images/card.png',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) {
+                    final reference = value?.trim() ?? '';
+                    if (reference.isNotEmpty &&
+                        !reference.startsWith('assets/')) {
+                      return 'Use an asset path starting with assets/.';
+                    }
+                    return null;
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                if (errorMessage != null)
+                  Text(
+                    errorMessage!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+
+                const SizedBox(height: 12),
+
+                ElevatedButton(
+                  onPressed: isBusy ? null : saveCard,
+                  child: Text(
+                    isBusy
+                        ? 'Saving...'
+                        : isEditing
+                        ? 'Save Changes'
+                        : 'Add Card',
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                OutlinedButton(
+                  onPressed: isBusy ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
