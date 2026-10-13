@@ -932,6 +932,71 @@ class _FolderCardsScreenState extends State<FolderCardsScreen> {
     }
   }
 
+  //Delete card with confirmation
+  Future<void> deleteCard(CardRecord card) async {
+    if (isBusy || card.id == null) return;
+
+    // Ask for confirmation before deleting
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Card'),
+          content: Text('Delete "${card.title}" (ID: ${card.id})?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || confirmed != true || isBusy) return;
+
+    setState(() {
+      isBusy = true;
+    });
+
+    int? affected;
+
+    try {
+      affected = await widget.helper.deleteCard(card.id!);
+    } catch (error, stackTrace) {
+      debugPrint('Delete card failed: $error\n$stackTrace');
+
+      if (mounted) {
+        showMessage('Could not delete card: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isBusy = false;
+        });
+      }
+    }
+
+    if (!mounted || affected == null) return;
+
+    // Refresh from SQLite after the delete operation
+    await loadCards();
+
+    if (!mounted) return;
+
+    if (errorMessage != null) {
+      showMessage('Delete completed, but refresh failed. Tap Retry.');
+    } else if (affected == 0) {
+      showMessage('Card no longer exists. Rows affected: 0');
+    } else {
+      showMessage('Card deleted. Rows affected: $affected');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -973,10 +1038,24 @@ class _FolderCardsScreenState extends State<FolderCardsScreen> {
                     leading: const Icon(Icons.style),
                     title: Text(card.title),
                     subtitle: Text('ID: ${card.id} | ${card.suit}'),
-                    trailing: IconButton(
-                      tooltip: 'Edit card',
-                      icon: const Icon(Icons.edit),
-                      onPressed: isBusy ? null : () => openCardForm(card),
+
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // PART 2: Edit card
+                        IconButton(
+                          tooltip: 'Edit card',
+                          icon: const Icon(Icons.edit),
+                          onPressed: isBusy ? null : () => openCardForm(card),
+                        ),
+
+                        // PART 2: Delete card
+                        IconButton(
+                          tooltip: 'Delete card',
+                          icon: const Icon(Icons.delete),
+                          onPressed: isBusy ? null : () => deleteCard(card),
+                        ),
+                      ],
                     ),
                   ),
                 );
