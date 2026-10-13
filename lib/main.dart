@@ -555,6 +555,118 @@ class _FolderListScreenState extends State<FolderListScreen> {
     }
   }
 
+  Future<void> addFolder() async {
+    if (isBusy) return;
+
+    String folderName = '';
+    String? validationError;
+    bool isSaving = false;
+
+    final newId = await showDialog<int>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add Folder'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    enabled: !isSaving,
+                    decoration: InputDecoration(
+                      labelText: 'Folder Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      folderName = value;
+                    },
+                  ),
+
+                  if (validationError != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        validationError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+
+              actions: [
+                TextButton(
+                  onPressed: isSaving
+                      ? null
+                      : () => Navigator.pop(dialogContext),
+                  child: const Text('Cancel'),
+                ),
+
+                ElevatedButton(
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          final name = folderName.trim();
+
+                          if (name.isEmpty) {
+                            setDialogState(() {
+                              validationError = 'Folder name cannot be blank.';
+                            });
+                            return;
+                          }
+
+                          setDialogState(() {
+                            isSaving = true;
+                            validationError = null;
+                          });
+
+                          try {
+                            final id = await widget.helper.insertFolder(name);
+
+                            if (!dialogContext.mounted) return;
+
+                            Navigator.pop(dialogContext, id);
+                          } catch (error, stackTrace) {
+                            debugPrint(
+                              'Insert folder failed: $error\n$stackTrace',
+                            );
+
+                            if (!dialogContext.mounted) return;
+
+                            setDialogState(() {
+                              validationError =
+                                  'Could not create folder. '
+                                  'The name may already exist.';
+                              isSaving = false;
+                            });
+                          }
+                        },
+                  child: const Text('Create'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted || newId == null) return;
+
+    await loadFolders();
+
+    if (!mounted) return;
+
+    if (errorMessage == null) {
+      showMessage('Folder created successfully. ID: $newId');
+    } else {
+      showMessage('Folder saved, but refresh failed. Tap Retry.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
