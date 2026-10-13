@@ -117,6 +117,93 @@ class DatabaseHelper {
   Future<int> delete(int id) async {
     return await _db.delete(table, where: '$columnId = ?', whereArgs: [id]);
   }
+
+  //Part 2 new methods for folders
+  Future<int> insertFolder(String name) async {
+    final trimmedName = name.trim();
+
+    if (trimmedName.isEmpty) {
+      throw ArgumentError('Folder name cannot be blank.');
+    }
+
+    final folder = Folder(
+      name: trimmedName,
+      createdAt: DateTime.now().toIso8601String(),
+    );
+
+    return await _db.insert('folders', folder.toMap());
+  }
+
+  Future<List<Folder>> getFoldersWithCounts() async {
+    final rows = await _db.rawQuery('''
+      SELECT f.id, f.name, f.created_at, COUNT(c.id) AS card_count
+      FROM folders AS f
+      LEFT JOIN cards AS c ON c.folder_id = f.id
+      GROUP BY f.id, f.name, f.created_at
+      ORDER BY f.name COLLATE NOCASE ASC
+    ''');
+
+    return rows.map((row) => Folder.fromMap(row)).toList();
+  }
+
+  Future<bool> folderExists(int folderId) async {
+    final rows = await _db.query(
+      'folders',
+      columns: ['id'],
+      where: 'id = ?',
+      whereArgs: [folderId],
+      limit: 1,
+    );
+
+    return rows.isNotEmpty;
+  }
+
+  Future<int> deleteFolder(int folderId) async {
+    return await _db.delete('folders', where: 'id = ?', whereArgs: [folderId]);
+  }
+
+  //Part 2 new methods for cards
+  Future<List<CardRecord>> getCards(int folderId) async {
+    final rows = await _db.query(
+      'cards',
+      where: 'folder_id = ?',
+      whereArgs: [folderId],
+      orderBy: 'title COLLATE NOCASE ASC, id ASC',
+    );
+
+    return rows.map((row) => CardRecord.fromMap(row)).toList();
+  }
+
+  Future<int> insertCard(CardRecord card) async {
+    return await _db.insert('cards', card.toMap());
+  }
+
+  Future<int> updateCard(CardRecord card) async {
+    if (card.id == null) {
+      throw ArgumentError('Card ID is required for update.');
+    }
+
+    final values = card.toMap()..remove('id');
+
+    final affected = await _db.update(
+      'cards',
+      values,
+      where: 'id = ?',
+      whereArgs: [card.id],
+    );
+
+    return affected;
+  }
+
+  Future<int> deleteCard(int cardId) async {
+    final affected = await _db.delete(
+      'cards',
+      where: 'id = ?',
+      whereArgs: [cardId],
+    );
+
+    return affected;
+  }
 }
 
 //Part 2 new Folder model
