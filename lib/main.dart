@@ -997,6 +997,65 @@ class _FolderCardsScreenState extends State<FolderCardsScreen> {
     }
   }
 
+  //Return the symbol for each card suit
+  String suitSymbol(String suit) {
+    switch (suit) {
+      case 'Hearts':
+        return '♥';
+      case 'Diamonds':
+        return '♦';
+      case 'Clubs':
+        return '♣';
+      case 'Spades':
+        return '♠';
+      default:
+        return '?';
+    }
+  }
+
+  //Display card image or suit fallback
+  Widget cardImage(CardRecord card) {
+    Widget fallback() {
+      final symbol = suitSymbol(card.suit);
+
+      final isRed = card.suit == 'Hearts' || card.suit == 'Diamonds';
+
+      return SizedBox(
+        width: 54,
+        height: 54,
+        child: Center(
+          child: Text(
+            symbol,
+            style: TextStyle(
+              fontSize: 32,
+              color: isRed ? Colors.red : Colors.black,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final imageRef = card.imageRef;
+
+    // Display the suit if no image reference is available.
+    if (imageRef == null ||
+        imageRef.trim().isEmpty ||
+        !imageRef.startsWith('assets/')) {
+      return fallback();
+    }
+
+    // Try to load a bundled Flutter asset.
+    return Image.asset(
+      imageRef,
+      width: 54,
+      height: 54,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        return fallback();
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1035,7 +1094,7 @@ class _FolderCardsScreenState extends State<FolderCardsScreen> {
 
                 return Card(
                   child: ListTile(
-                    leading: const Icon(Icons.style),
+                    leading: cardImage(card),
                     title: Text(card.title),
                     subtitle: Text('ID: ${card.id} | ${card.suit}'),
 
