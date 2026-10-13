@@ -667,6 +667,70 @@ class _FolderListScreenState extends State<FolderListScreen> {
     }
   }
 
+  Future<void> deleteFolder(Folder folder) async {
+    if (isBusy || folder.id == null) return;
+
+    // Ask the user to confirm deletion
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Delete Folder'),
+          content: Text('Delete "${folder.name}" and all its cards?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted || confirmed != true || isBusy) return;
+
+    setState(() {
+      isBusy = true;
+    });
+
+    int? affected;
+
+    try {
+      // Delete folder by its integer ID
+      affected = await widget.helper.deleteFolder(folder.id!);
+    } catch (error, stackTrace) {
+      debugPrint('Delete folder failed: $error\n$stackTrace');
+
+      if (mounted) {
+        showMessage('Could not delete folder: $error');
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          isBusy = false;
+        });
+      }
+    }
+
+    if (!mounted || affected == null) return;
+
+    await loadFolders();
+
+    if (!mounted) return;
+
+    if (errorMessage != null) {
+      showMessage('Delete completed, but refresh failed. Tap Retry.');
+    } else if (affected == 0) {
+      showMessage('Folder no longer exists. Rows affected: 0');
+    } else {
+      showMessage('Folder deleted. Rows affected: $affected');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -726,6 +790,12 @@ class _FolderListScreenState extends State<FolderListScreen> {
                     subtitle: Text(
                       'ID: ${folder.id} | '
                       '${folder.cardCount} cards',
+                    ),
+
+                    trailing: IconButton(
+                      tooltip: 'Delete folder',
+                      icon: const Icon(Icons.delete),
+                      onPressed: isBusy ? null : () => deleteFolder(folder),
                     ),
                   ),
                 );
