@@ -731,6 +731,24 @@ class _FolderListScreenState extends State<FolderListScreen> {
     }
   }
 
+  //Open a folder's cards
+  Future<void> openFolder(Folder folder) async {
+    if (isBusy || folder.id == null) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            FolderCardsScreen(helper: widget.helper, folder: folder),
+      ),
+    );
+
+    if (!mounted) return;
+
+    // Refresh folder counts when returning from the cards screen.
+    await loadFolders();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -792,6 +810,8 @@ class _FolderListScreenState extends State<FolderListScreen> {
                       '${folder.cardCount} cards',
                     ),
 
+                    onTap: isBusy ? null : () => openFolder(folder),
+
                     trailing: IconButton(
                       tooltip: 'Delete folder',
                       icon: const Icon(Icons.delete),
@@ -806,6 +826,128 @@ class _FolderListScreenState extends State<FolderListScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Add Folder'),
       ),
+    );
+  }
+}
+
+// PART 2 Display cards belonging to a folder
+class FolderCardsScreen extends StatefulWidget {
+  final DatabaseHelper helper;
+  final Folder folder;
+
+  const FolderCardsScreen({
+    super.key,
+    required this.helper,
+    required this.folder,
+  });
+
+  @override
+  State<FolderCardsScreen> createState() => _FolderCardsScreenState();
+}
+
+class _FolderCardsScreenState extends State<FolderCardsScreen> {
+  List<CardRecord> cards = [];
+
+  bool isLoading = true;
+  bool isBusy = false;
+  String? errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    loadCards();
+  }
+
+  // Display feedback to user
+  void showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // Read only cards belonging to the selected folder
+  Future<void> loadCards() async {
+    if (isBusy) return;
+
+    setState(() {
+      isLoading = true;
+      isBusy = true;
+    });
+
+    try {
+      final rows = await widget.helper.getCards(widget.folder.id!);
+
+      if (!mounted) return;
+
+      setState(() {
+        cards = rows;
+        errorMessage = null;
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Load cards failed: $error\n$stackTrace');
+
+      if (!mounted) return;
+
+      setState(() {
+        errorMessage = 'Could not load cards: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          isBusy = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.folder.name),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh cards',
+            icon: const Icon(Icons.refresh),
+            onPressed: isBusy ? null : loadCards,
+          ),
+        ],
+      ),
+
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : errorMessage != null
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(errorMessage!, textAlign: TextAlign.center),
+                  ElevatedButton(
+                    onPressed: isBusy ? null : loadCards,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          : cards.isEmpty
+          ? const Center(child: Text('No cards in this folder.'))
+          : ListView.builder(
+              itemCount: cards.length,
+              itemBuilder: (context, index) {
+                final card = cards[index];
+
+                return Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.style),
+                    title: Text(card.title),
+                    subtitle: Text('ID: ${card.id} | ${card.suit}'),
+                  ),
+                );
+              },
+            ),
     );
   }
 }
