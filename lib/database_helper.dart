@@ -5,10 +5,12 @@ import 'package:path_provider/path_provider.dart';
 class DatabaseHelper {
   static const _databaseName = "MyDatabase.db";
   static const _databaseVersion = 2;
+
   static const table = 'my_table';
   static const columnId = '_id';
   static const columnName = 'name';
   static const columnAge = 'age';
+
   late Database _db;
   // this opens the database (and creates it if it doesn't exist)
   Future<void> init() async {
@@ -52,7 +54,7 @@ class DatabaseHelper {
       CREATE TABLE folders (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
-        created_at TEXT NOT NULL,
+        created_at TEXT NOT NULL
       )
     ''');
 
