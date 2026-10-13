@@ -4,7 +4,7 @@ import 'package:path_provider/path_provider.dart';
 
 class DatabaseHelper {
   static const _databaseName = "MyDatabase.db";
-  static const _databaseVersion = 1;
+  static const _databaseVersion = 2;
   static const table = 'my_table';
   static const columnId = '_id';
   static const columnName = 'name';
@@ -17,19 +17,62 @@ class DatabaseHelper {
     _db = await openDatabase(
       path,
       version: _databaseVersion,
-      onCreate: _onCreate,
+
+      //Part 2 modified
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
+      onCreate: (db, version) async {
+        await createPartOneTables(db);
+        await createCatalogueTables(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await createCatalogueTables(db);
+        }
+      },
     );
   }
 
   // SQL code to create the database table
-  Future _onCreate(Database db, int version) async {
+  //Part 2 modified
+  Future<void> createPartOneTables(Database db) async {
     await db.execute('''
-CREATE TABLE $table (
-$columnId INTEGER PRIMARY KEY,
-$columnName TEXT NOT NULL,
-$columnAge INTEGER NOT NULL
-)
-''');
+      CREATE TABLE $table (
+      $columnId INTEGER PRIMARY KEY,
+      $columnName TEXT NOT NULL,
+      $columnAge INTEGER NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> createCatalogueTables(Database db) async {
+    //create folders table (parent)
+    await db.execute('''
+      CREATE TABLE folders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+      )
+    ''');
+
+    //create cards table (child)
+    await db.execute('''
+      CREATE TABLE cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        suit TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        image_ref TEXT,
+        folder_id INTEGER NOT NULL,
+        FOREIGN KEY (folder_id) REFERENCES folders(id) ON DELETE CASCADE
+      )
+    ''');
+
+    //create index for searching cards by folder
+    await db.execute('''
+      CREATE INDEX idx_cards_folder_id ON cards(folder_id);
+    ''');
   }
 
   // Helper methods
